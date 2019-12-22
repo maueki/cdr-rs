@@ -96,7 +96,7 @@ impl<'storage> BincodeRead<'storage> for SliceReader<'storage> {
             return Err(SliceReader::unexpected_eof());
         }
 
-        let string = match ::std::str::from_utf8(&self.slice[..length]) {
+        let string = match ::std::str::from_utf8(&self.slice[..(length - 1)]) {
             Ok(s) => s,
             Err(e) => return Err(ErrorKind::InvalidUtf8Encoding(e).into()),
         };
@@ -145,9 +145,7 @@ where
         // Then create a slice with the length as our desired length. This is
         // safe as long as we only write (no reads) to this buffer, because
         // `reserve_exact` above has allocated this space.
-        let buf = unsafe {
-            slice::from_raw_parts_mut(self.temp_buffer.as_mut_ptr(), length)
-        };
+        let buf = unsafe { slice::from_raw_parts_mut(self.temp_buffer.as_mut_ptr(), length) };
 
         // This method is assumed to properly handle slices which include
         // uninitialized bytes (as ours does). See discussion at the link below.
@@ -176,7 +174,7 @@ where
     {
         self.fill_buffer(length)?;
 
-        let string = match ::std::str::from_utf8(&self.temp_buffer[..]) {
+        let string = match ::std::str::from_utf8(&self.temp_buffer[..(length - 1)]) {
             Ok(s) => s,
             Err(e) => return Err(::ErrorKind::InvalidUtf8Encoding(e).into()),
         };

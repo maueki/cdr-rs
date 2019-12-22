@@ -107,8 +107,10 @@ impl<'a, W: Write, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        try!(self.serialize_u64(v.len() as u64));
-        self.writer.write_all(v.as_bytes()).map_err(Into::into)
+        try!(self.serialize_u32((v.len() + 1) as u32));
+        let mut bs = v.as_bytes().to_vec();
+        bs.push(b'\0');
+        self.writer.write_all(&bs).map_err(Into::into)
     }
 
     fn serialize_char(self, c: char) -> Result<()> {
@@ -118,7 +120,7 @@ impl<'a, W: Write, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        try!(self.serialize_u64(v.len() as u64));
+        try!(self.serialize_u32(v.len() as u32));
         self.writer.write_all(v).map_err(Into::into)
     }
 
@@ -136,7 +138,7 @@ impl<'a, W: Write, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let len = try!(len.ok_or(ErrorKind::SequenceMustHaveLength));
-        try!(self.serialize_u64(len as u64));
+        try!(self.serialize_u32(len as u32));
         Ok(Compound { ser: self })
     }
 
@@ -312,8 +314,8 @@ impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        try!(self.add_value(0 as u64));
-        self.add_raw(v.len() as u64)
+        try!(self.add_value(0 as u32));
+        self.add_raw((v.len() + 1) as u64)
     }
 
     fn serialize_char(self, c: char) -> Result<()> {
@@ -321,7 +323,7 @@ impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        try!(self.add_value(0 as u64));
+        try!(self.add_value(0 as u32));
         self.add_raw(v.len() as u64)
     }
 
@@ -340,7 +342,7 @@ impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let len = try!(len.ok_or(ErrorKind::SequenceMustHaveLength));
 
-        try!(self.serialize_u64(len as u64));
+        try!(self.serialize_u32(len as u32));
         Ok(SizeCompound { ser: self })
     }
 

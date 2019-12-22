@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
-extern crate bincode;
+extern crate cdr_rs;
 
-use bincode::{deserialize, serialize};
+use cdr_rs::{deserialize, serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct Entity {

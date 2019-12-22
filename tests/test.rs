@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
 
-extern crate bincode;
 extern crate byteorder;
+extern crate cdr_rs;
 #[macro_use]
 extern crate serde;
 extern crate serde_bytes;
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::result::Result as StdResult;
 
-use bincode::{
+use cdr_rs::{
     config, deserialize, deserialize_from, deserialize_in_place, serialize, serialized_size,
     ErrorKind, Result,
 };
@@ -233,7 +233,7 @@ fn deserializing_errors() {
         ErrorKind::InvalidBoolEncoding(0xA) => {}
         _ => panic!(),
     }
-    match *deserialize::<String>(&vec![1, 0, 0, 0, 0, 0, 0, 0, 0xFF][..]).unwrap_err() {
+    match *deserialize::<String>(&vec![2, 0, 0, 0, 0xFF, 0][..]).unwrap_err() {
         ErrorKind::InvalidUtf8Encoding(_) => {}
         _ => panic!(),
     }
@@ -293,8 +293,8 @@ fn too_big_serialize() {
     assert!(config().limit(3).serialize(&0u32).is_err());
     assert!(config().limit(4).serialize(&0u32).is_ok());
 
-    assert!(config().limit(8 + 4).serialize(&"abcde").is_err());
-    assert!(config().limit(8 + 5).serialize(&"abcde").is_ok());
+    assert!(config().limit(4 + 4 + 1).serialize(&"abcde").is_err());
+    assert!(config().limit(4 + 5 + 1).serialize(&"abcde").is_ok());
 }
 
 #[test]
@@ -305,10 +305,10 @@ fn test_serialized_size() {
     assert!(serialized_size(&0u64).unwrap() == 8);
 
     // length isize stored as u64
-    assert!(serialized_size(&"").unwrap() == 8);
-    assert!(serialized_size(&"a").unwrap() == 8 + 1);
+    assert!(serialized_size(&"").unwrap() == 4 + 1);
+    assert!(serialized_size(&"a").unwrap() == 4 + 1 + 1);
 
-    assert!(serialized_size(&vec![0u32, 1u32, 2u32]).unwrap() == 8 + 3 * (4));
+    assert!(serialized_size(&vec![0u32, 1u32, 2u32]).unwrap() == 4 + 3 * (4));
 }
 
 #[test]
@@ -318,28 +318,26 @@ fn test_serialized_size_bounded() {
     assert!(config().limit(2).serialized_size(&0u16).unwrap() == 2);
     assert!(config().limit(4).serialized_size(&0u32).unwrap() == 4);
     assert!(config().limit(8).serialized_size(&0u64).unwrap() == 8);
-    assert!(config().limit(8).serialized_size(&"").unwrap() == 8);
-    assert!(config().limit(8 + 1).serialized_size(&"a").unwrap() == 8 + 1);
+    assert!(config().limit(4 + 1).serialized_size(&"").unwrap() == 4 + 1);
+    assert!(config().limit(4 + 1 + 1).serialized_size(&"a").unwrap() == 4 + 1 + 1);
     assert!(
         config()
-            .limit(8 + 3 * 4)
+            .limit(4 + 3 * 4)
             .serialized_size(&vec![0u32, 1u32, 2u32])
             .unwrap()
-            == 8 + 3 * 4
+            == 4 + 3 * 4
     );
     // Below
     assert!(config().limit(0).serialized_size(&0u8).is_err());
     assert!(config().limit(1).serialized_size(&0u16).is_err());
     assert!(config().limit(3).serialized_size(&0u32).is_err());
     assert!(config().limit(7).serialized_size(&0u64).is_err());
-    assert!(config().limit(7).serialized_size(&"").is_err());
-    assert!(config().limit(8 + 0).serialized_size(&"a").is_err());
-    assert!(
-        config()
-            .limit(8 + 3 * 4 - 1)
-            .serialized_size(&vec![0u32, 1u32, 2u32])
-            .is_err()
-    );
+    assert!(config().limit(4 + 0).serialized_size(&"").is_err());
+    assert!(config().limit(4 + 1 + 0).serialized_size(&"a").is_err());
+    assert!(config()
+        .limit(4 + 3 * 4 - 1)
+        .serialized_size(&vec![0u32, 1u32, 2u32])
+        .is_err());
 }
 
 #[test]
@@ -423,7 +421,8 @@ fn test_oom_protection() {
         .serialize(&FakeVec {
             len: 0xffffffffffffffffu64,
             byte: 1,
-        }).unwrap();
+        })
+        .unwrap();
     let y: Result<Vec<u8>> = config()
         .limit(10)
         .deserialize_from(&mut Cursor::new(&x[..]));
@@ -484,7 +483,7 @@ fn test_zero_copy_parse() {
 
 #[test]
 fn test_zero_copy_parse_deserialize_into() {
-    use bincode::BincodeRead;
+    use cdr_rs::BincodeRead;
     use std::io;
 
     /// A BincodeRead implementation for byte slices
@@ -524,7 +523,7 @@ fn test_zero_copy_parse_deserialize_into() {
                 return Err(SliceReader::unexpected_eof());
             }
 
-            let string = match ::std::str::from_utf8(&self.slice[..length]) {
+            let string = match ::std::str::from_utf8(&self.slice[..(length - 1)]) {
                 Ok(s) => s,
                 Err(e) => return Err(ErrorKind::InvalidUtf8Encoding(e).into()),
             };
@@ -581,7 +580,8 @@ fn test_zero_copy_parse_deserialize_into() {
                 slice: &encoded[..],
             },
             &mut target,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(target, f);
     }
 }

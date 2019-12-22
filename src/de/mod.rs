@@ -48,13 +48,15 @@ impl<'de, R: BincodeRead<'de>, O: Options> Deserializer<R, O> {
     }
 
     fn read_vec(&mut self) -> Result<Vec<u8>> {
-        let len: usize = try!(serde::Deserialize::deserialize(&mut *self));
+        let len: u32 = try!(serde::Deserialize::deserialize(&mut *self));
         self.read_bytes(len as u64)?;
-        self.reader.get_byte_buffer(len)
+        self.reader.get_byte_buffer(len as usize)
     }
 
     fn read_string(&mut self) -> Result<String> {
-        let vec = self.read_vec()?;
+        let mut vec = self.read_vec()?;
+        vec.pop()
+            .ok_or_else(|| ErrorKind::Custom("invalid format".to_string()))?;
         String::from_utf8(vec).map_err(|e| ErrorKind::InvalidUtf8Encoding(e.utf8_error()).into())
     }
 }
@@ -162,12 +164,10 @@ where
             return Err(error());
         }
 
-        let res = try!(
-            str::from_utf8(&buf[..width])
-                .ok()
-                .and_then(|s| s.chars().next())
-                .ok_or(error())
-        );
+        let res = try!(str::from_utf8(&buf[..width])
+            .ok()
+            .and_then(|s| s.chars().next())
+            .ok_or(error()));
         visitor.visit_char(res)
     }
 
@@ -175,9 +175,9 @@ where
     where
         V: serde::de::Visitor<'de>,
     {
-        let len: usize = try!(serde::Deserialize::deserialize(&mut *self));
+        let len: u32 = try!(serde::Deserialize::deserialize(&mut *self));
         try!(self.read_bytes(len as u64));
-        self.reader.forward_read_str(len, visitor)
+        self.reader.forward_read_str(len as usize, visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
@@ -191,9 +191,9 @@ where
     where
         V: serde::de::Visitor<'de>,
     {
-        let len: usize = try!(serde::Deserialize::deserialize(&mut *self));
+        let len: u32 = try!(serde::Deserialize::deserialize(&mut *self));
         try!(self.read_bytes(len as u64));
-        self.reader.forward_read_bytes(len, visitor)
+        self.reader.forward_read_bytes(len as usize, visitor)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
@@ -290,9 +290,9 @@ where
     where
         V: serde::de::Visitor<'de>,
     {
-        let len = try!(serde::Deserialize::deserialize(&mut *self));
+        let len: u32 = try!(serde::Deserialize::deserialize(&mut *self));
 
-        self.deserialize_tuple(len, visitor)
+        self.deserialize_tuple(len as usize, visitor)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
